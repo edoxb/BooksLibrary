@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import './App.css'
+import { useKeycloak } from './KeycloakProvider'
 
 interface Libro {
   id: string
@@ -25,6 +26,7 @@ interface LibroFormData {
 }
 
 function App() {
+  const { keycloak, authenticated } = useKeycloak()
   const [libri, setLibri] = useState<Libro[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -41,14 +43,52 @@ function App() {
   })
   const [submitting, setSubmitting] = useState(false)
 
+  const handleLogin = () => {
+    keycloak.login()
+  }
+
+  const handleLogout = () => {
+    keycloak.logout()
+  }
+
   useEffect(() => {
+    if (!authenticated) {
+      setLoading(false)
+      return
+    }
+
     const fetchLibri = async () => {
       try {
         setLoading(true)
         setError(null)
+        
+        // Ottieni il token di accesso
+        const token = keycloak.token
+        
         // Usa il proxy configurato in vite.config.ts
-        const response = await fetch('/api/libri')
+        const response = await fetch('/api/libri', {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        })
+        
         if (!response.ok) {
+          if (response.status === 401) {
+            // Token scaduto, prova a rinnovarlo
+            await keycloak.updateToken(30)
+            const newToken = keycloak.token
+            const retryResponse = await fetch('/api/libri', {
+              headers: {
+                'Authorization': `Bearer ${newToken}`
+              }
+            })
+            if (!retryResponse.ok) {
+              throw new Error(`Errore HTTP: ${retryResponse.status}`)
+            }
+            const retryData = await retryResponse.json()
+            setLibri(retryData)
+            return
+          }
           throw new Error(`Errore HTTP: ${response.status}`)
         }
         const data = await response.json()
@@ -62,7 +102,7 @@ function App() {
     }
 
     fetchLibri()
-  }, [])
+  }, [authenticated, keycloak])
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target
@@ -100,10 +140,14 @@ function App() {
         libroData.immagine = formData.immagine
       }
 
+      // Ottieni il token di accesso
+      const token = keycloak.token
+      
       const response = await fetch('/api/libri', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
         },
         body: JSON.stringify(libroData)
       })
@@ -138,9 +182,73 @@ function App() {
     }
   }
 
+  // Se l'utente non è autenticato, mostra la schermata di login
+  if (!authenticated) {
+    return (
+      <div className="app-container" style={{ 
+        display: 'flex', 
+        flexDirection: 'column', 
+        justifyContent: 'center', 
+        alignItems: 'center', 
+        minHeight: '100vh',
+        textAlign: 'center'
+      }}>
+        <h1>📚 BooksLibrary</h1>
+        <p style={{ marginBottom: '2rem', fontSize: '1.2rem' }}>
+          Effettua il login per accedere alla tua libreria
+        </p>
+        <button
+          onClick={handleLogin}
+          style={{
+            padding: '0.75rem 1.5rem',
+            fontSize: '1.1rem',
+            cursor: 'pointer',
+            backgroundColor: '#4CAF50',
+            color: 'white',
+            border: 'none',
+            borderRadius: '4px',
+            fontWeight: 'bold'
+          }}
+        >
+          🔐 Accedi
+        </button>
+      </div>
+    )
+  }
+
   return (
     <div className="app-container">
-      <h1>📚 BooksLibrary</h1>
+      <div style={{ 
+        display: 'flex', 
+        justifyContent: 'space-between', 
+        alignItems: 'center', 
+        marginBottom: '1rem',
+        paddingBottom: '1rem',
+        borderBottom: '1px solid #ddd'
+      }}>
+        <h1>📚 BooksLibrary</h1>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+          {keycloak.tokenParsed && (
+            <span style={{ fontSize: '0.9rem', color: '#666' }}>
+              👤 {keycloak.tokenParsed.preferred_username || keycloak.tokenParsed.name || 'Utente'}
+            </span>
+          )}
+          <button
+            onClick={handleLogout}
+            style={{
+              padding: '0.5rem 1rem',
+              fontSize: '0.9rem',
+              cursor: 'pointer',
+              backgroundColor: '#f44336',
+              color: 'white',
+              border: 'none',
+              borderRadius: '4px'
+            }}
+          >
+            🚪 Esci
+          </button>
+        </div>
+      </div>
       
       <button 
         onClick={() => setShowForm(!showForm)}

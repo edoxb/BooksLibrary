@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from pymongo import MongoClient
 from pymongo.errors import DuplicateKeyError
@@ -10,6 +10,7 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import date, datetime
 from typing import Optional, List
 from pydantic import BaseModel, Field, field_validator, ConfigDict
+from auth import get_current_user
 
 # Configurazione MongoDB
 MONGODB_URL = os.getenv("MONGODB_URL", "mongodb://admin:password123@mongodb:27017/bookslibrary?authSource=admin")
@@ -177,7 +178,7 @@ async def db_info():
 # Endpoint CRUD per i libri
 
 @app.post("/libri", response_model=LibroResponse, status_code=201)
-async def crea_libro(libro: LibroCreate):
+async def crea_libro(libro: LibroCreate, current_user: dict = Depends(get_current_user)):
     """Crea un nuovo libro"""
     import asyncio
     import traceback
@@ -228,7 +229,7 @@ async def crea_libro(libro: LibroCreate):
 
 
 @app.get("/libri", response_model=List[LibroResponse])
-async def lista_libri():
+async def lista_libri(current_user: dict = Depends(get_current_user)):
     """Ottieni tutti i libri"""
     import asyncio
     if database is None:
@@ -252,7 +253,7 @@ async def lista_libri():
 
 
 @app.get("/libri/{libro_id}", response_model=LibroResponse)
-async def ottieni_libro(libro_id: str):
+async def ottieni_libro(libro_id: str, current_user: dict = Depends(get_current_user)):
     """Ottieni un libro specifico per ID"""
     import asyncio
     if database is None:
@@ -285,7 +286,7 @@ async def ottieni_libro(libro_id: str):
 
 
 @app.put("/libri/{libro_id}", response_model=LibroResponse)
-async def aggiorna_libro(libro_id: str, libro_update: LibroUpdate):
+async def aggiorna_libro(libro_id: str, libro_update: LibroUpdate, current_user: dict = Depends(get_current_user)):
     """Aggiorna un libro esistente"""
     import asyncio
     if database is None:
@@ -336,7 +337,7 @@ async def aggiorna_libro(libro_id: str, libro_update: LibroUpdate):
 
 
 @app.delete("/libri/{libro_id}", status_code=204)
-async def elimina_libro(libro_id: str):
+async def elimina_libro(libro_id: str, current_user: dict = Depends(get_current_user)):
     """Elimina un libro"""
     import asyncio
     if database is None:

@@ -19,6 +19,41 @@ services:
       timeout: 5s
       retries: 5
 
+  keycloak:
+    image: quay.io/keycloak/keycloak:24.0
+    container_name: bookslibrary_keycloak
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      KEYCLOAK_ADMIN: admin
+      KEYCLOAK_ADMIN_PASSWORD: admin
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://keycloak-db:5432/keycloak
+      KC_DB_USERNAME: keycloak
+      KC_DB_PASSWORD: keycloak
+      KC_HOSTNAME_STRICT: false
+      KC_HOSTNAME_STRICT_HTTPS: false
+      KC_HTTP_ENABLED: true
+    command: start-dev
+    depends_on:
+      - keycloak-db
+    networks:
+      - bookslibrary_network
+
+  keycloak-db:
+    image: postgres:15
+    container_name: bookslibrary_keycloak_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: keycloak
+      POSTGRES_USER: keycloak
+      POSTGRES_PASSWORD: keycloak
+    volumes:
+      - keycloak_db_data:/var/lib/postgresql/data
+    networks:
+      - bookslibrary_network
+
   backend:
     build:
       context: ./Backend
@@ -30,9 +65,14 @@ services:
     environment:
       MONGODB_URL: mongodb://admin:password123@mongodb:27017/bookslibrary?authSource=admin
       MONGODB_DB_NAME: bookslibrary
+      KEYCLOAK_URL: http://keycloak:8080
+      KEYCLOAK_REALM: bookslibrary
+      KEYCLOAK_CLIENT_ID: bookslibrary-frontend
     depends_on:
       mongodb:
         condition: service_healthy
+      keycloak:
+        condition: service_started
     networks:
       - bookslibrary_network
     volumes:
@@ -49,8 +89,12 @@ services:
       - "5173:5173"
     environment:
       VITE_API_URL: http://backend:8000
+      VITE_KEYCLOAK_URL: http://localhost:8080
+      VITE_KEYCLOAK_REALM: bookslibrary
+      VITE_KEYCLOAK_CLIENT_ID: bookslibrary-frontend
     depends_on:
       - backend
+      - keycloak
     networks:
       - bookslibrary_network
     volumes:
@@ -59,6 +103,7 @@ services:
 
 volumes:
   mongodb_data:
+  keycloak_db_data:
 
 networks:
   bookslibrary_network:
