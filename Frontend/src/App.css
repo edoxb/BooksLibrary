@@ -1,0 +1,86 @@
+.app-container {
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 2rem;
+}
+
+.app-container h1 {
+  text-align: center;
+  color: #333;
+  margin-bottom: 2rem;
+}
+
+.error {
+  color: #d32f2f;
+  background-color: #ffebee;
+  padding: 1rem;
+  border-radius: 4px;
+  text-align: center;
+}
+
+.libri-container {
+  margin-top: 2rem;
+}
+
+.libri-container h2 {
+  color: #555;
+  margin-bottom: 1.5rem;
+}
+
+.libri-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 1.5rem;
+  margin-top: 1rem;
+}
+
+.libro-card {
+  background: #fff;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  padding: 1.5rem;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  transition: box-shadow 0.3s ease;
+}
+
+.libro-card:hover {
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+}
+
+.libro-card h3 {
+  color: #1976d2;
+  margin-top: 0;
+  margin-bottom: 0.5rem;
+  font-size: 1.25rem;
+}
+
+.libro-card .autore {
+  color: #666;
+  font-style: italic;
+  margin-bottom: 0.75rem;
+}
+
+.libro-card .genere {
+  color: #555;
+  margin-bottom: 0.5rem;
+}
+
+.libro-card .data {
+  color: #777;
+  font-size: 0.9rem;
+  margin-bottom: 0.5rem;
+}
+
+.libro-card .recensione,
+.libro-card .commento {
+  color: #444;
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid #eee;
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+
+.libro-card strong {
+  color: #333;
+}
