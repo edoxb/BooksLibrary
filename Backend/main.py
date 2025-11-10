@@ -10,7 +10,7 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import date, datetime
 from typing import Optional, List
 from pydantic import BaseModel, Field, field_validator, ConfigDict
-from auth import get_current_user
+from auth import get_current_user, require_role, require_any_role
 
 # Configurazione MongoDB
 MONGODB_URL = os.getenv("MONGODB_URL", "mongodb://admin:password123@mongodb:27017/bookslibrary?authSource=admin")
@@ -54,7 +54,7 @@ app = FastAPI(
 # Configurazione CORS per permettere comunicazione con frontend
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://frontend:5173"],  # Vite default port e container name
+    allow_origins=["http://localhost:5173", "http://frontend:5173", "http://app.localhost"],  # Vite default port, container name e Traefik
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -178,7 +178,7 @@ async def db_info():
 # Endpoint CRUD per i libri
 
 @app.post("/libri", response_model=LibroResponse, status_code=201)
-async def crea_libro(libro: LibroCreate, current_user: dict = Depends(get_current_user)):
+async def crea_libro(libro: LibroCreate, current_user: dict = Depends(require_role("admin"))):
     """Crea un nuovo libro"""
     import asyncio
     import traceback
@@ -337,7 +337,7 @@ async def aggiorna_libro(libro_id: str, libro_update: LibroUpdate, current_user:
 
 
 @app.delete("/libri/{libro_id}", status_code=204)
-async def elimina_libro(libro_id: str, current_user: dict = Depends(get_current_user)):
+async def elimina_libro(libro_id: str, current_user: dict = Depends(require_role("admin"))):
     """Elimina un libro"""
     import asyncio
     if database is None:
@@ -364,4 +364,38 @@ async def elimina_libro(libro_id: str, current_user: dict = Depends(get_current_
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Errore durante l'eliminazione: {str(e)}")
+
+
+# Endpoint per ottenere i ruoli dell'utente corrente
+@app.get("/user/roles")
+async def get_my_roles(current_user: dict = Depends(get_current_user)):
+    """Ottiene i ruoli dell'utente corrente"""
+    return {
+        "username": current_user["username"],
+        "roles": current_user.get("roles", [])
+    }
+
+
+# Esempio di endpoint con autorizzazione basata su ruoli
+@app.get("/admin/stats")
+async def get_admin_stats(current_user: dict = Depends(require_role("admin"))):
+    """Endpoint riservato agli amministratori - statistiche del sistema"""
+    import asyncio
+    if database is None:
+        raise HTTPException(status_code=500, detail="Database non connesso")
+    
+    try:
+        loop = asyncio.get_event_loop()
+        total_libri = await loop.run_in_executor(
+            executor,
+            database.libri.count_documents,
+            {}
+        )
+        
+        return {
+            "total_libri": total_libri,
+            "admin": current_user["username"]
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Errore: {str(e)}")
 

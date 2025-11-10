@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import './App.css'
 import { useKeycloak } from './KeycloakProvider'
+import LandingPage from './LandingPage'
 
 interface Libro {
   id: string
@@ -62,8 +63,20 @@ function App() {
         setLoading(true)
         setError(null)
         
+        // Assicurati che il token sia valido prima di usarlo
+        try {
+          await keycloak.updateToken(30)
+        } catch (error) {
+          console.error('Errore nel rinnovo del token:', error)
+          throw new Error('Impossibile rinnovare il token. Effettua nuovamente il login.')
+        }
+        
         // Ottieni il token di accesso
         const token = keycloak.token
+        
+        if (!token) {
+          throw new Error('Token non disponibile. Effettua nuovamente il login.')
+        }
         
         // Usa il proxy configurato in vite.config.ts
         const response = await fetch('/api/libri', {
@@ -75,21 +88,31 @@ function App() {
         if (!response.ok) {
           if (response.status === 401) {
             // Token scaduto, prova a rinnovarlo
-            await keycloak.updateToken(30)
-            const newToken = keycloak.token
-            const retryResponse = await fetch('/api/libri', {
-              headers: {
-                'Authorization': `Bearer ${newToken}`
+            try {
+              await keycloak.updateToken(30)
+              const newToken = keycloak.token
+              if (!newToken) {
+                throw new Error('Impossibile ottenere un nuovo token')
               }
-            })
-            if (!retryResponse.ok) {
-              throw new Error(`Errore HTTP: ${retryResponse.status}`)
+              const retryResponse = await fetch('/api/libri', {
+                headers: {
+                  'Authorization': `Bearer ${newToken}`
+                }
+              })
+              if (!retryResponse.ok) {
+                const errorData = await retryResponse.json().catch(() => ({ detail: 'Errore sconosciuto' }))
+                throw new Error(errorData.detail || `Errore HTTP: ${retryResponse.status}`)
+              }
+              const retryData = await retryResponse.json()
+              setLibri(retryData)
+              return
+            } catch (updateError) {
+              console.error('Errore nel rinnovo del token:', updateError)
+              throw new Error('Token scaduto e impossibile rinnovarlo. Effettua nuovamente il login.')
             }
-            const retryData = await retryResponse.json()
-            setLibri(retryData)
-            return
           }
-          throw new Error(`Errore HTTP: ${response.status}`)
+          const errorData = await response.json().catch(() => ({ detail: 'Errore sconosciuto' }))
+          throw new Error(errorData.detail || `Errore HTTP: ${response.status}`)
         }
         const data = await response.json()
         setLibri(data)
@@ -140,8 +163,20 @@ function App() {
         libroData.immagine = formData.immagine
       }
 
+      // Assicurati che il token sia valido prima di usarlo
+      try {
+        await keycloak.updateToken(30)
+      } catch (error) {
+        console.error('Errore nel rinnovo del token:', error)
+        throw new Error('Impossibile rinnovare il token. Effettua nuovamente il login.')
+      }
+      
       // Ottieni il token di accesso
       const token = keycloak.token
+      
+      if (!token) {
+        throw new Error('Token non disponibile. Effettua nuovamente il login.')
+      }
       
       const response = await fetch('/api/libri', {
         method: 'POST',
@@ -182,38 +217,9 @@ function App() {
     }
   }
 
-  // Se l'utente non è autenticato, mostra la schermata di login
+  // Se l'utente non è autenticato, mostra la landing page
   if (!authenticated) {
-    return (
-      <div className="app-container" style={{ 
-        display: 'flex', 
-        flexDirection: 'column', 
-        justifyContent: 'center', 
-        alignItems: 'center', 
-        minHeight: '100vh',
-        textAlign: 'center'
-      }}>
-        <h1>📚 BooksLibrary</h1>
-        <p style={{ marginBottom: '2rem', fontSize: '1.2rem' }}>
-          Effettua il login per accedere alla tua libreria
-        </p>
-        <button
-          onClick={handleLogin}
-          style={{
-            padding: '0.75rem 1.5rem',
-            fontSize: '1.1rem',
-            cursor: 'pointer',
-            backgroundColor: '#4CAF50',
-            color: 'white',
-            border: 'none',
-            borderRadius: '4px',
-            fontWeight: 'bold'
-          }}
-        >
-          🔐 Accedi
-        </button>
-      </div>
-    )
+    return <LandingPage />
   }
 
   return (
