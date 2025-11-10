@@ -1,0 +1,162 @@
+services:
+  traefik:
+    image: traefik:v3.0
+    container_name: bookslibrary_traefik
+    restart: unless-stopped
+    command:
+      - "--api.dashboard=true"
+      - "--api.insecure=true"
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--entrypoints.web.address=:80"
+      - "--log.level=INFO"
+      
+
+    ports:
+      - "80:80"
+      - "8080:8080"  # API e Dashboard Traefik: http://localhost:8080/dashboard/
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./coraza:/etc/coraza:ro
+    networks:
+      - bookslibrary_network
+    labels:
+      - 'traefik.enable=true'
+      - 'traefik.http.routers.traefik-dashboard.rule=Host(`traefik.localhost`)'
+      - 'traefik.http.routers.traefik-dashboard.entrypoints=web'
+      - 'traefik.http.routers.traefik-dashboard.service=api@internal'
+
+
+  mongodb:
+    image: mongo:7.0
+    container_name: bookslibrary_mongodb
+    restart: unless-stopped
+    ports:
+      - "27017:27017"
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: admin
+      MONGO_INITDB_ROOT_PASSWORD: password123
+      MONGO_INITDB_DATABASE: bookslibrary
+    volumes:
+      - mongodb_data:/data/db
+    networks:
+      - bookslibrary_network
+    healthcheck:
+      test: echo 'db.runCommand("ping").ok' | mongosh localhost:27017/test --quiet
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:24.0
+    container_name: bookslibrary_keycloak
+    restart: unless-stopped
+    environment:
+      KEYCLOAK_ADMIN: admin
+      KEYCLOAK_ADMIN_PASSWORD: admin
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://keycloak-db:5432/keycloak
+      KC_DB_USERNAME: keycloak
+      KC_DB_PASSWORD: keycloak
+      KC_HOSTNAME_STRICT: false
+      KC_HOSTNAME_STRICT_HTTPS: false
+      KC_HTTP_ENABLED: true
+      KC_PROXY: edge
+      KC_PROXY_ADDRESS_FORWARDING: true
+    command: start-dev
+    depends_on:
+      - keycloak-db
+    networks:
+      - bookslibrary_network
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.keycloak.rule=Host(`auth.localhost`)"
+      - "traefik.http.routers.keycloak.entrypoints=web"
+      - "traefik.http.services.keycloak.loadbalancer.server.port=8080"
+      - "traefik.http.routers.keycloak.middlewares=keycloak-cors"
+      - "traefik.http.middlewares.keycloak-cors.headers.accesscontrolallowmethods=GET,POST,PUT,DELETE,OPTIONS,HEAD"
+      - "traefik.http.middlewares.keycloak-cors.headers.accesscontrolalloworiginlist=http://app.localhost,http://localhost:5173"
+      - "traefik.http.middlewares.keycloak-cors.headers.accesscontrolallowheaders=Content-Type,Authorization,Accept,Origin,X-Requested-With"
+      - "traefik.http.middlewares.keycloak-cors.headers.accesscontrolallowcredentials=true"
+      - "traefik.http.middlewares.keycloak-cors.headers.accesscontrolmaxage=3600"
+
+  keycloak-db:
+    image: postgres:15
+    container_name: bookslibrary_keycloak_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: keycloak
+      POSTGRES_USER: keycloak
+      POSTGRES_PASSWORD: keycloak
+    volumes:
+      - keycloak_db_data:/var/lib/postgresql/data
+    networks:
+      - bookslibrary_network
+
+  backend:
+    build:
+      context: ./Backend
+      dockerfile: Dockerfile
+    container_name: bookslibrary_backend
+    restart: unless-stopped
+    # NOTA: Nessuna porta esposta direttamente - accessibile solo tramite Traefik su http://api.localhost
+    environment:
+      MONGODB_URL: mongodb://admin:password123@mongodb:27017/bookslibrary?authSource=admin
+      MONGODB_DB_NAME: bookslibrary
+      KEYCLOAK_URL: http://keycloak:8080
+      KEYCLOAK_REALM: BooksLibrary
+      KEYCLOAK_CLIENT_ID: bookslibrary-frontend
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      keycloak:
+        condition: service_started
+    networks:
+      - bookslibrary_network
+    volumes:
+      - ./Backend:/app
+    command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.backend.rule=Host(`api.localhost`)"
+      - "traefik.http.routers.backend.entrypoints=web"
+      - "traefik.http.services.backend.loadbalancer.server.port=8000"
+      - "traefik.http.routers.backend.middlewares=cors"
+      - "traefik.http.middlewares.cors.headers.accesscontrolallowmethods=GET,POST,PUT,DELETE,OPTIONS"
+      - "traefik.http.middlewares.cors.headers.accesscontrolalloworiginlist=http://app.localhost"
+      - "traefik.http.middlewares.cors.headers.accesscontrolallowheaders=Content-Type,Authorization"
+      - "traefik.http.middlewares.cors.headers.accesscontrolallowcredentials=true"
+  
+  frontend:
+    build:
+      context: ./Frontend
+      dockerfile: Dockerfile
+    container_name: bookslibrary_frontend
+    restart: unless-stopped
+    environment:
+      VITE_API_URL: http://api.localhost
+      VITE_KEYCLOAK_URL: http://auth.localhost
+      VITE_KEYCLOAK_REALM: BooksLibrary
+      VITE_KEYCLOAK_CLIENT_ID: bookslibrary-frontend
+    depends_on:
+      - backend
+      - keycloak
+    networks:
+      - bookslibrary_network
+    volumes:
+      - ./Frontend:/app
+      - /app/node_modules
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.frontend.rule=Host(`app.localhost`)"
+      - "traefik.http.routers.frontend.entrypoints=web"
+      - "traefik.http.services.frontend.loadbalancer.server.port=5173"
+
+volumes:
+  mongodb_data:
+  keycloak_db_data:
+
+networks:
+  bookslibrary_network:
+    driver: bridge
+
