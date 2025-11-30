@@ -19,16 +19,34 @@ export const KeycloakProvider = ({ children }: KeycloakProviderProps) => {
   const [initialized, setInitialized] = useState(false);
 
   useEffect(() => {
-    // Evita doppie inizializzazioni
-    if (initialized) return;
+    // Flag globale per evitare doppie inizializzazioni anche con StrictMode
+    if ((window as any).__keycloak_initializing__) {
+      return;
+    }
+    
+    // Evita doppie inizializzazioni - verifica anche se Keycloak è già inizializzato
+    if (initialized || keycloak.authenticated !== undefined) {
+      setLoading(false);
+      return;
+    }
+    
+    // Imposta flag globale per prevenire inizializzazioni multiple
+    (window as any).__keycloak_initializing__ = true;
+    setInitialized(true);
     
     const initKeycloak = async () => {
       try {
-        setInitialized(true);
-        
         // Verifica se c'è un codice di autorizzazione nell'URL (callback dopo login)
         const urlParams = new URLSearchParams(window.location.search);
         const hasCode = urlParams.has('code');
+        
+        // Verifica se Keycloak è già inizializzato
+        if (keycloak.authenticated !== undefined) {
+          setAuthenticated(keycloak.authenticated);
+          setLoading(false);
+          (window as any).__keycloak_initializing__ = false;
+          return;
+        }
         
         const authenticated = await keycloak.init({
           onLoad: hasCode ? 'login-required' : 'check-sso',
@@ -44,43 +62,67 @@ export const KeycloakProvider = ({ children }: KeycloakProviderProps) => {
           window.history.replaceState({}, document.title, window.location.pathname);
         }
       } catch (error) {
-        console.error('Errore inizializzazione Keycloak:', error);
-        setAuthenticated(false);
-        setInitialized(false); // Permetti un nuovo tentativo in caso di errore
+        // Se l'errore è "already initialized", ignoralo
+        if (error instanceof Error && error.message.includes('already initialized')) {
+          setAuthenticated(keycloak.authenticated || false);
+        } else {
+          console.error('Errore inizializzazione Keycloak:', error);
+          setAuthenticated(false);
+        }
+        setInitialized(false);
+        (window as any).__keycloak_initializing__ = false;
       } finally {
         setLoading(false);
+        (window as any).__keycloak_initializing__ = false;
       }
     };
 
     initKeycloak();
-
-    // Listener per aggiornamenti dello stato di autenticazione
-    keycloak.onAuthSuccess = () => {
-      console.log('Autenticazione riuscita');
-      setAuthenticated(true);
-      // Assicurati che il codice sia stato rimosso dall'URL
-      if (window.location.search.includes('code=')) {
-        window.history.replaceState({}, document.title, window.location.pathname);
+    
+    // Cleanup function per StrictMode
+    return () => {
+      // Non fare cleanup di Keycloak qui, solo resetta il flag se necessario
+      if ((window as any).__keycloak_initializing__) {
+        (window as any).__keycloak_initializing__ = false;
       }
     };
+  }, []);
 
-    keycloak.onAuthError = (error: unknown) => {
-      console.error('Errore autenticazione:', error);
-      setAuthenticated(false);
-    };
-
-    keycloak.onTokenExpired = () => {
-      keycloak.updateToken(30).then((refreshed: boolean) => {
-        if (refreshed) {
-          console.log('Token aggiornato');
-        } else {
-          console.log('Token non ancora scaduto');
+  // Listener per aggiornamenti dello stato di autenticazione - fuori da useEffect per evitare registrazioni multiple
+  useEffect(() => {
+    // Registra i listener solo una volta
+    if (!keycloak.onAuthSuccess) {
+      keycloak.onAuthSuccess = () => {
+        console.log('Autenticazione riuscita');
+        setAuthenticated(true);
+        // Assicurati che il codice sia stato rimosso dall'URL
+        if (window.location.search.includes('code=')) {
+          window.history.replaceState({}, document.title, window.location.pathname);
         }
-      }).catch(() => {
-        console.error('Errore nel rinnovo del token');
+      };
+    }
+
+    if (!keycloak.onAuthError) {
+      keycloak.onAuthError = (error: unknown) => {
+        console.error('Errore autenticazione:', error);
         setAuthenticated(false);
-      });
-    };
+      };
+    }
+
+    if (!keycloak.onTokenExpired) {
+      keycloak.onTokenExpired = () => {
+        keycloak.updateToken(30).then((refreshed: boolean) => {
+          if (refreshed) {
+            console.log('Token aggiornato');
+          } else {
+            console.log('Token non ancora scaduto');
+          }
+        }).catch(() => {
+          console.error('Errore nel rinnovo del token');
+          setAuthenticated(false);
+        });
+      };
+    }
   }, []);
 
   const value: KeycloakContextValue = {

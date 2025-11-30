@@ -1,0 +1,11 @@
+http:
+  middlewares:
+    # Middleware Basic Auth per la dashboard Traefik
+    dashboard-auth:
+      basicAuth:
+        # Formato: username:password_hash
+        # Hash generato con: htpasswd -nbB username password
+        # Password di default: admin (cambiala in produzione!)
+        users:
+          - "admin:$2y$05$HymEzmOn9zp2WxDS/yEjEuhbfFSE.44VyIx/nBO3Pqt9SD.C4fzOq"
+
