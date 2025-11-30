@@ -3,10 +3,12 @@ from pymongo import MongoClient
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from contextlib import asynccontextmanager
+from dotenv import load_dotenv
+load_dotenv()
 
 # Configurazione MongoDB
-MONGODB_URL = os.getenv("MONGODB_URL", "mongodb://admin:password123@mongodb:27017/bookslibrary?authSource=admin")
-MONGODB_DB_NAME = os.getenv("MONGODB_DB_NAME", "bookslibrary")
+MONGODB_URL = os.getenv("MONGODB_URL")
+MONGODB_DB_NAME = os.getenv("MONGODB_DB_NAME")
 
 # Client MongoDB globale
 mongo_client: MongoClient = None

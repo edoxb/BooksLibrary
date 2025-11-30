@@ -1,0 +1,42 @@
+http:
+  middlewares:
+    # Middleware WAF - Headers di sicurezza base
+    waf-headers:
+      # Headers di sicurezza HTTP
+      # Configurazione per sviluppo (HTTP) - più permissiva
+      headers:
+        customRequestHeaders:
+          X-Forwarded-Proto: "http"
+        customResponseHeaders:
+          X-Content-Type-Options: "nosniff"
+          # X-Frame-Options rimosso per permettere Keycloak (usa redirect, non iframe, ma meglio essere permissivi in sviluppo)
+          # X-Frame-Options: "SAMEORIGIN"
+          X-XSS-Protection: "1; mode=block"
+          Referrer-Policy: "strict-origin-when-cross-origin"
+          # CSP permissivo per sviluppo - permette Google Fonts e altre risorse esterne
+          # style-src-elem: necessario per caricare stylesheet da Google Fonts
+          # font-src: necessario per caricare i font da Google
+          Content-Security-Policy: "default-src 'self' 'unsafe-inline' 'unsafe-eval' data: blob: http://api.localhost http://auth.localhost http://app.localhost; connect-src 'self' http://api.localhost http://auth.localhost ws: wss:; img-src 'self' data: blob: http: https:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; style-src-elem 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: http: https: https://fonts.gstatic.com; frame-src 'self' http://auth.localhost https://www.youtube.com; form-action 'self' http://auth.localhost http://auth.localhost/*;"
+          # Strict-Transport-Security rimosso perché richiede HTTPS
+          # Strict-Transport-Security: "max-age=31536000; includeSubDomains"
+    
+    # Rate limiting middleware separato
+    waf-ratelimit:
+      rateLimit:
+        average: 100
+        burst: 50
+    
+    # Middleware chain che combina headers e rate limiting
+    waf:
+      chain:
+        middlewares:
+          - waf-headers
+          - waf-ratelimit
+    
+    # IP whitelist (opzionale - decommentare e configurare come middleware separato)
+    # waf-whitelist:
+    #   ipWhiteList:
+    #     sourceRange:
+    #       - "127.0.0.1/32"
+    #       - "192.168.0.0/16"
+

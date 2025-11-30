@@ -1,7 +1,8 @@
 .app-container {
-  max-width: 1280px;
-  margin: 0 auto;
+  width: 100%;
+  margin: 0;
   padding: 2rem;
+  box-sizing: border-box;
 }
 
 .app-container h1 {
@@ -20,6 +21,7 @@
 
 .libri-container {
   margin-top: 2rem;
+  width: 100%;
 }
 
 .libri-container h2 {
@@ -32,6 +34,7 @@
   grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
   gap: 1.5rem;
   margin-top: 1rem;
+  width: 100%;
 }
 
 .libro-card {
