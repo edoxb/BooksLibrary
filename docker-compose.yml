@@ -100,7 +100,7 @@ services:
     build:
       context: ./Backend
       dockerfile: Dockerfile
-      #image: edanco1997/edo_test:backend
+    image: edanco1997/edo_test:backend
     container_name: bookslibrary_backend
     restart: unless-stopped
     # NOTA: Nessuna porta esposta direttamente - accessibile solo tramite Traefik su http://api.localhost
@@ -137,7 +137,7 @@ services:
     build:
       context: ./Frontend
       dockerfile: Dockerfile
-    #image: edanco1997/edo_test:frontend
+    image: edanco1997/edo_test:frontend
     container_name: bookslibrary_frontend
     restart: unless-stopped
     environment:
