@@ -1,33 +1,27 @@
 services:
   traefik:
-    image: traefik:v3.5
+    image: traefik:v3.6
     container_name: bookslibrary_traefik
     restart: unless-stopped
     command:
       - "--api.dashboard=true"
-      - "--api.insecure=false"
-      - "--providers.docker=true"
+      - "--providers.docker"
       - "--providers.docker.exposedbydefault=false"
       - "--providers.file.directory=/etc/traefik/dynamic"
       - "--providers.file.watch=true"
       - "--entrypoints.web.address=:80"
+      - "--entrypoints.websecure.address=:443"
       - "--log.level=INFO"
       
-
     ports:
       - "80:80"
-      - "8080:8080"  # API e Dashboard Traefik: http://localhost:8080/dashboard/
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - ./traefik-dynamic:/etc/traefik/dynamic:ro
     networks:
       - bookslibrary_network
-    labels:
-      - 'traefik.enable=true'
-      - 'traefik.http.routers.traefik-dashboard.rule=Host(`traefik.localhost`)'
-      - 'traefik.http.routers.traefik-dashboard.entrypoints=web'
-      - 'traefik.http.routers.traefik-dashboard.service=api@internal'
-      - 'traefik.http.routers.traefik-dashboard.middlewares=dashboard-auth@file'
+    # Dashboard accessibile tramite route HTTP protetta su http://traefik.localhost
+    # Autenticazione Basic Auth: username=admin, password=admin (vedi traefik-dynamic/dashboard-auth.yml)
 
 
   mongodb:
@@ -106,6 +100,7 @@ services:
     build:
       context: ./Backend
       dockerfile: Dockerfile
+      #image: edanco1997/edo_test:backend
     container_name: bookslibrary_backend
     restart: unless-stopped
     # NOTA: Nessuna porta esposta direttamente - accessibile solo tramite Traefik su http://api.localhost
@@ -142,6 +137,7 @@ services:
     build:
       context: ./Frontend
       dockerfile: Dockerfile
+    #image: edanco1997/edo_test:frontend
     container_name: bookslibrary_frontend
     restart: unless-stopped
     environment:
