@@ -1,0 +1,12 @@
+http:
+  routers:
+    # Router per la dashboard Traefik
+    traefik-dashboard:
+      rule: Host(`traefik.localhost`)
+      entrypoints:
+        - web
+      service: api@internal
+      middlewares:
+        - dashboard-auth
+      priority: 1
+
