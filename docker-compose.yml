@@ -41,10 +41,11 @@ services:
     networks:
       - bookslibrary_network
     healthcheck:
-      test: echo 'db.runCommand("ping").ok' | mongosh localhost:27017/test --quiet
+      test: ["CMD-SHELL", "mongosh --eval 'db.adminCommand(\"ping\")' --quiet || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 5
+      start_period: 40s
 
   keycloak:
     image: quay.io/keycloak/keycloak:26.4.0
